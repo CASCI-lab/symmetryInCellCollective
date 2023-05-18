@@ -84,28 +84,27 @@ def computeOnNodes(nodes, maxPI, timeoutSecs):
                 q = Queue()
                 p = Process(target=runSym, args=(n, q))
                 pbar.set_description(info + " SY")
-                # t0 = time.time()
                 p.start()
                 time_sym = q.get(timeout=timeoutSecs) # raises queue.Empty on timeout
                 n._two_symbols = q.get() 
                 p.join()
-                # time_sym = time.time() - t0
 
                 tss = [n._two_symbols[0],  n._two_symbols[1]]
                 correct0 = compare(n._prime_implicants["0"], n._two_symbols[0])[0] if "0" in n._prime_implicants else True
                 correct1 = compare(n._prime_implicants["1"], n._two_symbols[1])[0] if "1" in n._prime_implicants else True
                 correct =  correct0 and correct1
 
-                pbar.set_description(info + " CO")
-                t0 = time.time()
-                n._check_compute_canalization_variables(ts_coverage="whatever bro")
-                time_cov = time.time() - t0
+                # comment out CO and KS steps for cana==0.1.2, as ks is broken and implemented differently
+                # pbar.set_description(info + " CO")
+                # t0 = time.time()
+                # n._check_compute_canalization_variables(ts_coverage="whatever bro")
+                # time_cov = time.time() - t0
 
-                pbar.set_description(info + " KS")
-                t0 = time.time()
-                # ks = n.input_symmetry(aggOp="mean", kernel="numDots", sameSymbol=False)
-                ks = n.input_symmetry_mean()
-                time_ks = time.time() - t0
+                # pbar.set_description(info + " KS")
+                # t0 = time.time()
+                # # ks = n.input_symmetry(aggOp="mean", kernel="numDots", sameSymbol=False)
+                # ks = n.input_symmetry_mean()
+                # time_ks = time.time() - t0
         except queue.Empty:
             print("timeout on SY")
             timeout = True
