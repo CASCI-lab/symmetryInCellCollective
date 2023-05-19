@@ -69,4 +69,22 @@ axes[1].set_xlabel("$k_s / 2^k$")
 plt.tight_layout()
 plt.savefig("ks_dist.pdf")
 
+# plot ks vs ke
+plt.figure(figsize=(10,10))
+sns.displot(dataUniq[dataUniq["version"]=="new"], x="ke_norm", y="ks_norm", cbar=True)
+plt.xlabel("$k_e/2^k$")
+plt.ylabel("$k_s/2^k$", rotation="horizontal")
+plt.tight_layout()
+plt.savefig("ks_v_ke.pdf")
+
+# plot time for TSS vs num PI in both versions to see scaling behavior
+plt.figure(figsize=(5,5))
+sns.stripplot(dataUniq, x="numPI", y="time_sym", hue="version", alpha=0.3, jitter=0.25)
+plt.yscale("log")
+plt.xlim([0,13])
+plt.xlabel("Num. Prime Implicants")
+plt.ylabel("TSS time (sec)")
+plt.tight_layout()
+plt.savefig("tss_time-vs-PI-by-version.pdf")
+
 # plt.show()

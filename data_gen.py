@@ -6,15 +6,15 @@ import time
 import numpy as np
 import argparse
 import math
-# import signal
 from multiprocessing import Process, Queue
 import queue
-# from threading import Thread, Timer
-# import _thread
 from helper import compare
 import os
 
 def runSym(node: BooleanNode, q: Queue):
+    """compute two-symbol schemata of node. Return result and time taken through q. This should be used to start a forked process from main.
+    Note: this does NOT check that node has already computed everything necessary for two-symbol calculation.
+    """
     t0 = time.time()
     node._check_compute_canalization_variables(two_symbols=True)
     q.put(time.time() - t0)
@@ -22,6 +22,14 @@ def runSym(node: BooleanNode, q: Queue):
 
 # collect all CC functions
 def getCCNodes(n, k):
+    """return BooleanNode objects from the Cell collective.
+
+    Params:
+        n: the number to return
+        k: the maximum k of the function to return
+    Returns:
+        (list of BooleanNode)
+    """
     nodes = [node for network in load_all_cell_collective_models() for node in network.nodes if node.k <= k or k==0]
     if n <= 0:
         return nodes
@@ -50,10 +58,20 @@ def getRandomNodes(n, ks, biass):
 # prime implicants, time taken on each, k, bias
 # only attempt symmetry if PI < some value
 def computeOnNodes(nodes, maxPI, timeoutSecs):
+    """compute symmetry and other properties of BooleanNodes in nodes.
+
+    Params:
+        maxPI: the threshold for not computing symmetry on the function.
+        timeoutSecs: the seconds before timeout during the symmetry calculation.
+    """
+    # initialize data frame
     data = pd.DataFrame(columns=["network", "name", "func", "k", "bias", "numPI", "time_PI", "ks", "time_sym", "time_ks", "time_cov", "ke", "tss", "correct", "timeout"])
+    # for each BooleanNode
     for n in (pbar := tqdm(nodes)):
         info = f"{n.name:>10}, k: {n.k:>3}, {''.join(n.outputs)[:32]:>32}"
         pbar.set_description(info + " PI")
+
+        # default values for row
         func = "".join(map(str, n.outputs))
         k = n.k
         bias = n.bias()
@@ -68,6 +86,7 @@ def computeOnNodes(nodes, maxPI, timeoutSecs):
         correct = np.nan
         timeout = False
 
+        # wrap in try for timeout
         try:
         
             # compute prime implicants
@@ -78,34 +97,35 @@ def computeOnNodes(nodes, maxPI, timeoutSecs):
 
             ke = n.effective_connectivity(norm=False)
 
-            # compute two-symbol symmetry
-            if maxPI == 0 or numPI <= maxPI:
+            if maxPI == 0 or numPI <= maxPI: # only continue if not too many PI
                 # setup process call for implementing a timeout
                 q = Queue()
-                p = Process(target=runSym, args=(n, q))
+                p = Process(target=runSym, args=(n, q)) # will compute two-symbol symmetry in spawned process
                 pbar.set_description(info + " SY")
                 p.start()
                 time_sym = q.get(timeout=timeoutSecs) # raises queue.Empty on timeout
                 n._two_symbols = q.get() 
                 p.join()
 
+                # check if F'' is same function as was given (i.e., if it got it right)
                 tss = [n._two_symbols[0],  n._two_symbols[1]]
                 correct0 = compare(n._prime_implicants["0"], n._two_symbols[0])[0] if "0" in n._prime_implicants else True
                 correct1 = compare(n._prime_implicants["1"], n._two_symbols[1])[0] if "1" in n._prime_implicants else True
                 correct =  correct0 and correct1
 
-                # comment out CO and KS steps for cana==0.1.2, as ks is broken and implemented differently
-                # pbar.set_description(info + " CO")
-                # t0 = time.time()
-                # n._check_compute_canalization_variables(ts_coverage="whatever bro")
-                # time_cov = time.time() - t0
+                # NOTE: comment out CO and KS steps for cana==0.1.2, as ks is broken and implemented differently
+                pbar.set_description(info + " CO")
+                t0 = time.time()
+                n._check_compute_canalization_variables(ts_coverage="whatever bro") # this step is necessary for ks
+                time_cov = time.time() - t0
 
-                # pbar.set_description(info + " KS")
-                # t0 = time.time()
-                # # ks = n.input_symmetry(aggOp="mean", kernel="numDots", sameSymbol=False)
-                # ks = n.input_symmetry_mean()
-                # time_ks = time.time() - t0
-        except queue.Empty:
+                pbar.set_description(info + " KS")
+                t0 = time.time()
+                # ks = n.input_symmetry(aggOp="mean", kernel="numDots", sameSymbol=False)
+                ks = n.input_symmetry_mean() # this version is faster
+                time_ks = time.time() - t0
+
+        except queue.Empty: # handles the timeout
             print("timeout on SY")
             timeout = True
             os.kill(p.pid, 9) # need os level call because stuck in Rust call
@@ -113,15 +133,18 @@ def computeOnNodes(nodes, maxPI, timeoutSecs):
             p.join()
             p.close()
 
+        # put row in frame with whatever was able to be computed
         data.loc[len(data.index)] = [n.network.name, n.name, func, k, bias, numPI, time_PI, ks, time_sym, time_ks, time_cov, ke, tss, correct, timeout]
     return data
 
 
 def runCC(args):
     data = computeOnNodes(getCCNodes(args.n, args.k), args.maxPI, args.timeoutSecs)
+    # compute normalized variants
     data["ks_norm"] = data["ks"] / data["k"]
     data["ke_norm"] = data["ke"] / data["k"]
-    data["source"] = ["cc"]*len(data.index)
+    # annotate data
+    data["source"] = ["cc"]*len(data.index) 
     data["version"] = [args.CANAversion]*len(data.index)
     data.to_csv(f"data/cc-ks-n_{args.n}-k_{args.k}-PI_{args.maxPI}-timeout_{args.timeoutSecs}-version_{args.CANAversion}.csv")
     return data
@@ -145,7 +168,7 @@ if __name__ == "__main__":
     parser_cc.add_argument("k", type=int, help="maxmimum k to examine. 0 for all")
     parser_cc.add_argument("maxPI", type=int, help="maximum number of PI a function can have to be examined. 0 for no max")
     parser_cc.add_argument("timeoutSecs", type=int, help="number of seconds to wait for TSS to complete. 0 for no timeout")
-    parser_cc.add_argument("--CANAversion", type=str, help="the CANA version to use to compute", default=None)
+    parser_cc.add_argument("--CANAversion", type=str, help="the CANA version to use to compute. NOTE: does NOT change the version, just annotates the data.", default=None)
     parser_cc.set_defaults(func=runCC)
 
     parser_rng = subparsers.add_parser("random")
@@ -157,5 +180,4 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # signal.signal(signal.SIGALRM, handler)
     args.func(args)
