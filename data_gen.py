@@ -57,15 +57,16 @@ def getRandomNodes(n, ks, biass):
 # get their ks and other variables
 # prime implicants, time taken on each, k, bias
 # only attempt symmetry if PI < some value
-def computeOnNodes(nodes, maxPI, timeoutSecs):
+def computeOnNodes(nodes, maxPI, timeoutSecs, ntrials):
     """compute symmetry and other properties of BooleanNodes in nodes.
 
     Params:
         maxPI: the threshold for not computing symmetry on the function.
         timeoutSecs: the seconds before timeout during the symmetry calculation.
+        ntrials: the number of times to compute the symmetry on the same function
     """
     # initialize data frame
-    data = pd.DataFrame(columns=["network", "name", "func", "k", "bias", "numPI", "time_PI", "ks", "time_sym", "time_ks", "time_cov", "ke", "tss", "correct", "timeout"])
+    data = pd.DataFrame(columns=["network", "name", "func", "k", "bias", "numPI", "time_PI", "ks", "time_sym", "time_ks", "time_cov", "ke", "tss", "correct", "timeout", "time_sym_std"])
     # for each BooleanNode
     for n in (pbar := tqdm(nodes)):
         info = f"{n.name:>10}, k: {n.k:>3}, {''.join(n.outputs)[:32]:>32}"
@@ -76,6 +77,7 @@ def computeOnNodes(nodes, maxPI, timeoutSecs):
         k = n.k
         bias = n.bias()
         time_sym = np.nan
+        time_sym_std = np.nan
         time_ks = np.nan
         time_cov = np.nan
         ks = np.nan
@@ -99,13 +101,19 @@ def computeOnNodes(nodes, maxPI, timeoutSecs):
 
             if maxPI == 0 or numPI <= maxPI: # only continue if not too many PI
                 # setup process call for implementing a timeout
-                q = Queue()
-                p = Process(target=runSym, args=(n, q)) # will compute two-symbol symmetry in spawned process
-                pbar.set_description(info + " SY")
-                p.start()
-                time_sym = q.get(timeout=timeoutSecs) # raises queue.Empty on timeout
-                n._two_symbols = q.get() 
-                p.join()
+                symTimes = []
+                for trial in range(ntrials):
+                    n._two_symbols = None # reset two symbol result so calculation is recomputed for each trial
+                    q = Queue()
+                    p = Process(target=runSym, args=(n, q)) # will compute two-symbol symmetry in spawned process
+                    pbar.set_description(info + " SY")
+                    p.start()
+                    time_sym_tmp = q.get(timeout=timeoutSecs) # raises queue.Empty on timeout
+                    n._two_symbols = q.get() # data not shared between processes, so Node object passed is not the same one in this scope
+                    p.join()
+                    symTimes.append(time_sym_tmp)
+                time_sym = np.mean(symTimes)
+                time_sym_std = np.std(symTimes)
 
                 # check if F'' is same function as was given (i.e., if it got it right)
                 tss = [n._two_symbols[0],  n._two_symbols[1]]
@@ -114,16 +122,16 @@ def computeOnNodes(nodes, maxPI, timeoutSecs):
                 correct =  correct0 and correct1
 
                 # NOTE: comment out CO and KS steps for cana==0.1.2, as ks is broken and implemented differently
-                pbar.set_description(info + " CO")
-                t0 = time.time()
-                n._check_compute_canalization_variables(ts_coverage="whatever bro") # this step is necessary for ks
-                time_cov = time.time() - t0
+                # pbar.set_description(info + " CO")
+                # t0 = time.time()
+                # n._check_compute_canalization_variables(ts_coverage="whatever bro") # this step is necessary for ks
+                # time_cov = time.time() - t0
 
-                pbar.set_description(info + " KS")
-                t0 = time.time()
-                # ks = n.input_symmetry(aggOp="mean", kernel="numDots", sameSymbol=False)
-                ks = n.input_symmetry_mean() # this version is faster
-                time_ks = time.time() - t0
+                # pbar.set_description(info + " KS")
+                # t0 = time.time()
+                # # ks = n.input_symmetry(aggOp="mean", kernel="numDots", sameSymbol=False)
+                # ks = n.input_symmetry_mean() # this version is faster
+                # time_ks = time.time() - t0
 
         except queue.Empty: # handles the timeout
             print("timeout on SY")
@@ -133,20 +141,24 @@ def computeOnNodes(nodes, maxPI, timeoutSecs):
             p.join()
             p.close()
 
+            # handle case where timeout occurred but function TSS completed on previous trial
+            if len(symTimes) > 0:
+                print(f"WARNING: {n.network.name}, {n.name}, {func} timed out but previously completed")
+
         # put row in frame with whatever was able to be computed
-        data.loc[len(data.index)] = [n.network.name, n.name, func, k, bias, numPI, time_PI, ks, time_sym, time_ks, time_cov, ke, tss, correct, timeout]
+        data.loc[len(data.index)] = [n.network.name, n.name, func, k, bias, numPI, time_PI, ks, time_sym, time_ks, time_cov, ke, tss, correct, timeout, time_sym_std]
     return data
 
 
 def runCC(args):
-    data = computeOnNodes(getCCNodes(args.n, args.k), args.maxPI, args.timeoutSecs)
+    data = computeOnNodes(getCCNodes(args.n, args.k), args.maxPI, args.timeoutSecs, args.ntrials)
     # compute normalized variants
     data["ks_norm"] = data["ks"] / data["k"]
     data["ke_norm"] = data["ke"] / data["k"]
     # annotate data
     data["source"] = ["cc"]*len(data.index) 
     data["version"] = [args.CANAversion]*len(data.index)
-    data.to_csv(f"data/cc-ks-n_{args.n}-k_{args.k}-PI_{args.maxPI}-timeout_{args.timeoutSecs}-version_{args.CANAversion}.csv")
+    data.to_csv(f"data/cc-ks-n_{args.n}-k_{args.k}-PI_{args.maxPI}-timeout_{args.timeoutSecs}-version_{args.CANAversion}-trials_{args.ntrials}.csv")
     return data
 
 # TODO: add timestamp to csv
@@ -169,6 +181,7 @@ if __name__ == "__main__":
     parser_cc.add_argument("maxPI", type=int, help="maximum number of PI a function can have to be examined. 0 for no max")
     parser_cc.add_argument("timeoutSecs", type=int, help="number of seconds to wait for TSS to complete. 0 for no timeout")
     parser_cc.add_argument("--CANAversion", type=str, help="the CANA version to use to compute. NOTE: does NOT change the version, just annotates the data.", default=None)
+    parser_cc.add_argument("--ntrials", type=int, help="the number of times to compute the two-symbol symmetry for each function, for benchmarking purposes", default=1)
     parser_cc.set_defaults(func=runCC)
 
     parser_rng = subparsers.add_parser("random")
