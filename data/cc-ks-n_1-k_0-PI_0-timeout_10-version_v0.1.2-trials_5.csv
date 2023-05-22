@@ -1,0 +1,2 @@
+,network,name,func,k,bias,numPI,time_PI,ks,time_sym,time_ks,time_cov,ke,tss,correct,timeout,time_sym_std,ks_norm,ke_norm,source,version
+0,Apoptosis Network,Cas3,0111111100000000,4,0.4375,3,0.00014925003051757812,,0.002068614959716797,,,1.625,"[[('1222', [], [[1, 2, 3]]), ('2000', [], [[1, 2, 3]])], [('0212', [[1, 2, 3]], [])]]",True,False,0.0005177536114242051,,0.40625,cc,v0.1.2

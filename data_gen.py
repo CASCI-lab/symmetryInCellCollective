@@ -122,16 +122,16 @@ def computeOnNodes(nodes, maxPI, timeoutSecs, ntrials):
                 correct =  correct0 and correct1
 
                 # NOTE: comment out CO and KS steps for cana==0.1.2, as ks is broken and implemented differently
-                # pbar.set_description(info + " CO")
-                # t0 = time.time()
-                # n._check_compute_canalization_variables(ts_coverage="whatever bro") # this step is necessary for ks
-                # time_cov = time.time() - t0
+                pbar.set_description(info + " CO")
+                t0 = time.time()
+                n._check_compute_canalization_variables(ts_coverage="whatever bro") # this step is necessary for ks
+                time_cov = time.time() - t0
 
-                # pbar.set_description(info + " KS")
-                # t0 = time.time()
-                # # ks = n.input_symmetry(aggOp="mean", kernel="numDots", sameSymbol=False)
-                # ks = n.input_symmetry_mean() # this version is faster
-                # time_ks = time.time() - t0
+                pbar.set_description(info + " KS")
+                t0 = time.time()
+                # ks = n.input_symmetry(aggOp="mean", kernel="numDots", sameSymbol=False)
+                ks = n.input_symmetry_mean() # this version is faster
+                time_ks = time.time() - t0
 
         except queue.Empty: # handles the timeout
             print("timeout on SY")
