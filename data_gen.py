@@ -10,6 +10,7 @@ from multiprocessing import Process, Queue
 import queue
 from helper import compare
 import os
+import random_gen
 
 def runSym(node: BooleanNode, q: Queue):
     """compute two-symbol schemata of node. Return result and time taken through q. This should be used to start a forked process from main.
@@ -146,28 +147,33 @@ def computeOnNodes(nodes, maxPI, timeoutSecs, ntrials):
                 print(f"WARNING: {n.network.name}, {n.name}, {func} timed out but previously completed")
 
         # put row in frame with whatever was able to be computed
-        data.loc[len(data.index)] = [n.network.name, n.name, func, k, bias, numPI, time_PI, ks, time_sym, time_ks, time_cov, ke, tss, correct, timeout, time_sym_std]
+        data.loc[len(data.index)] = [n.network.name if n.network is not None else np.nan, n.name, func, k, bias, numPI, time_PI, ks, time_sym, time_ks, time_cov, ke, tss, correct, timeout, time_sym_std]
     return data
 
+
+def annotateData(data, args, source):
+    data["ks_norm"] = data["ks"] / data["k"]
+    data["ke_norm"] = data["ke"] / data["k"]
+    # annotate data
+    data["source"] = [source]*len(data.index) 
+    data["version"] = [args.CANAversion]*len(data.index)
+    return data
+    
 
 def runCC(args):
     data = computeOnNodes(getCCNodes(args.n, args.k), args.maxPI, args.timeoutSecs, args.ntrials)
     # compute normalized variants
-    data["ks_norm"] = data["ks"] / data["k"]
-    data["ke_norm"] = data["ke"] / data["k"]
-    # annotate data
-    data["source"] = ["cc"]*len(data.index) 
-    data["version"] = [args.CANAversion]*len(data.index)
-    data.to_csv(f"data/cc-ks-n_{args.n}-k_{args.k}-PI_{args.maxPI}-timeout_{args.timeoutSecs}-version_{args.CANAversion}-trials_{args.ntrials}.csv")
+    data = annotateData(data, args, "cc")
+    data.to_csv(f"data/cc-n_{args.n}-k_{args.k}-PI_{args.maxPI}-timeout_{args.timeoutSecs}-version_{args.CANAversion}-trials_{args.ntrials}.csv")
     return data
 
-# TODO: add timestamp to csv
 def runRng(args):
-    data = computeOnNodes(getRandomNodes(args.n, range(1, args.k+1), np.linspace(0, 0.5, num=args.biasStep)), args.maxPI)
-    data["ks_norm"] = data["ks"] / data["k"]
-    data["ke_norm"] = data["ke"] / data["k"]
-    data["source"] = ["rng"]*len(data.index)
-    data.to_csv(f"data/rng-ks-n_{args.n}-k_{args.k}-PI_{args.maxPI}-biasStep_{args.biasStep}.csv")
+    data = computeOnNodes(random_gen.loadFuncs(args.file), args.maxPI, args.timeoutSecs, args.ntrials)
+    data = annotateData(data, args, "rng")
+    try:
+        data.to_csv(f"data/rng-{os.path.basename(args.file)}-PI_{args.maxPI}-timeout_{args.timeoutSecs}-version_{args.CANAversion}-trials_{args.ntrials}.csv")
+    except:
+        data.to_csv("tmp.csv")
     return data
 
 # output csv
@@ -185,10 +191,11 @@ if __name__ == "__main__":
     parser_cc.set_defaults(func=runCC)
 
     parser_rng = subparsers.add_parser("random")
-    parser_rng.add_argument("n", type=int, help="number of unique functions to generate at each parameterization")
-    parser_rng.add_argument("k", type=int, help="max k of functions to generate")
+    parser_rng.add_argument("file", type=str, help="file from which to load Boolean functions")
     parser_rng.add_argument("maxPI", type=int, help="maximum number of PI a function can have to be examined")
-    parser_rng.add_argument("biasStep", type=int, help="step size on bias")
+    parser_rng.add_argument("timeoutSecs", type=int, help="number of seconds to wait for TSS to complete. 0 for no timeout")
+    parser_rng.add_argument("--CANAversion", type=str, help="the CANA version to use to compute. NOTE: does NOT change the version, just annotates the data.", default=None)
+    parser_rng.add_argument("--ntrials", type=int, help="the number of times to compute the two-symbol symmetry for each function, for benchmarking purposes", default=1)
     parser_rng.set_defaults(func=runRng)
 
     args = parser.parse_args()

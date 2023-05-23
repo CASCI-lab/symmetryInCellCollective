@@ -5,7 +5,7 @@ from matplotlib import lines as mlines
 import pandas as pd
 import numpy as np
 
-def loadData():
+def loadDataCC():
 	new = pd.read_csv("./data/cc-ks-n_0-k_0-PI_0-timeout_10-version_new-trials_5.csv")
 	old = pd.read_csv("./data/cc-ks-n_0-k_0-PI_0-timeout_10-version_v0.1.2-trials_5.csv")
 	data = pd.concat(
@@ -14,8 +14,16 @@ def loadData():
 	)
 	return data
 
-if __name__ == "__main__":
-	data = loadData()
+def loadDataRng():
+	new = pd.read_csv("./data/rng-funcs-rng-n_200-k_5-biasStep_6.txt-PI_0-timeout_10-version_new-trials_5.csv")
+	old = pd.read_csv("./data/rng-funcs-rng-n_200-k_5-biasStep_6.txt-PI_0-timeout_10-version_v0.1.2-trials_5.csv")
+	data = pd.concat(
+		[new, old],
+		ignore_index=True
+	)
+	return data
+
+def analysis(data, source):
 	# print(data)
 
 	# count number incorrect
@@ -26,6 +34,7 @@ if __name__ == "__main__":
 	# remove duplicate functions
 	dataUniq = data.drop_duplicates(subset=["func", "version"])
 	dataUniq = dataUniq.sort_values(by=["version", "func"])
+	print(dataUniq)
 
 	numIncorrect = len(dataUniq[ (dataUniq["version"]=="v0.1.2") & (dataUniq["correct"]==False) ])
 	# count number of timeouts
@@ -63,11 +72,11 @@ if __name__ == "__main__":
 	# axes[1].set_xlabel("v0.1.2 / schematodes")
 	axes[1].set_xticks([])
 	axes[1].tick_params(axis="both", labelsize=16)
-	axes[1].axhline(np.log10(50), linestyle="dashed", c="black", label="mean")
+	axes[1].axhline(np.log10(np.nanmean(speedups)), linestyle="dashed", c="black", label="mean")
 	axes[1].set_ylim([-4,4])
 	plt.legend()
 	plt.tight_layout()
-	fig.savefig("speedup.pdf")
+	fig.savefig(f"figs/speedup-{source}.pdf")
 
 	# plot ks with NON-unique functions
 	fig, axes = plt.subplots(2,1, figsize=(5,5))
@@ -77,7 +86,7 @@ if __name__ == "__main__":
 	sns.histplot(data[data["version"]=="new"], x="ks_norm", bins=15, ax=axes[1])
 	axes[1].set_xlabel("$k_s / 2^k$")
 	plt.tight_layout()
-	plt.savefig("ks_dist.pdf")
+	plt.savefig(f"figs/ks_dist-{source}.pdf")
 
 	# plot ks vs ke
 	plt.figure(figsize=(10,10))
@@ -85,7 +94,7 @@ if __name__ == "__main__":
 	plt.xlabel("$k_e/2^k$")
 	plt.ylabel("$k_s/2^k$", rotation="horizontal")
 	plt.tight_layout()
-	plt.savefig("ks_v_ke.pdf")
+	plt.savefig(f"figs/ks_v_ke-{source}.pdf")
 
 	# plot time for TSS vs num PI in both versions to see scaling behavior
 	plt.figure(figsize=(5,5))
@@ -95,13 +104,19 @@ if __name__ == "__main__":
 	plt.xlabel("Num. Prime Implicants")
 	plt.ylabel("TSS time (sec)")
 	plt.tight_layout()
-	plt.savefig("tss_time-vs-PI-by-version.pdf")
+	plt.savefig(f"figs/tss_time-vs-PI-by-version-{source}.pdf")
 
 	# plot std
 	plt.figure(figsize=(5,5))
 	data["time_sym_ratio"] = data["time_sym_std"] / data["time_sym"]
 	sns.histplot(data, x="time_sym_ratio", hue="version", element="step", log_scale=(True, False))
 	plt.xlabel("TSS time std / TSS time mean")
-	plt.savefig("tss_time_std-by-version.pdf")
+	plt.savefig(f"figs/tss_time_std-by-version-{source}.pdf")
 
 	# plt.show()
+
+if __name__ == "__main__":
+	analysis(loadDataCC(), "cc")
+	analysis(loadDataRng(), "rng")
+
+
