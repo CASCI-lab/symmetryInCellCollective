@@ -117,18 +117,23 @@ def analysis(data, source):
 	fig, axes = plt.subplots(2,1, figsize=(5,5))
 	sns.set_context("paper")
 	sns.histplot(data[data["version"]=="new"], x="ks", bins=15, ax=axes[0])
+	axes[0].set_yscale("log")
 	axes[0].set_xlabel("$k_s$")
 	sns.histplot(data[data["version"]=="new"], x="ks_norm", bins=15, ax=axes[1])
-	axes[1].set_xlabel("$k_s / 2^k$")
+	axes[1].set_xlabel("$k_s / k$")
+	axes[1].set_yscale("log")
 	plt.tight_layout()
 	plt.savefig(f"figs/ks_dist-{source}.pdf")
 
 	# plot ks vs ke
 	plt.figure(figsize=(10,10))
-	sns.displot(dataUniq[dataUniq["version"]=="new"], x="ke_norm", y="ks_norm", cbar=True)
-	plt.xlabel("$k_e/2^k$")
-	plt.ylabel("$k_s/2^k$", rotation="horizontal")
+	sns.histplot(dataUniq[dataUniq["version"]=="new"], x="ke_norm", y="ks_norm", cbar=True, binwidth=0.05, binrange=((0,1), (0,1)))
+	plt.ylim(0,1)
+	# plt.gca().set_ylim([0, 1])
+	plt.xlabel("$k_e/k$")
+	plt.ylabel("$k_s/k$", rotation="horizontal")
 	plt.tight_layout()
+	plt.axis("equal")
 	plt.savefig(f"figs/ks_v_ke-{source}.pdf")
 
 	# plot time for TSS vs num PI in both versions to see scaling behavior
