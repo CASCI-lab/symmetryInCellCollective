@@ -127,7 +127,7 @@ def analysis(data, source):
 
 	# plot ks vs ke
 	plt.figure(figsize=(10,10))
-	sns.histplot(dataUniq[dataUniq["version"]=="new"], x="ke_norm", y="ks_norm", cbar=True, binwidth=0.05, binrange=((0,1), (0,1)))
+	sns.displot(dataUniq[dataUniq["version"]=="new"], x="ke_norm", y="ks_norm", cbar=True, binwidth=0.05, binrange=((0,1), (0,1)))
 	plt.ylim(0,1)
 	# plt.gca().set_ylim([0, 1])
 	plt.xlabel("$k_e/k$")
