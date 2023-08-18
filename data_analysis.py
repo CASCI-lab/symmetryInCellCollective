@@ -117,13 +117,17 @@ def analysis(data, source):
 	fig, axes = plt.subplots(2,1, figsize=(5,5))
 	sns.set_context("paper")
 	sns.histplot(data[data["version"]=="new"], x="ks", bins=15, ax=axes[0])
-	axes[0].set_yscale("log")
 	axes[0].set_xlabel("$k_s$")
 	sns.histplot(data[data["version"]=="new"], x="ks_norm", bins=15, ax=axes[1])
 	axes[1].set_xlabel("$k_s / k$")
-	axes[1].set_yscale("log")
 	plt.tight_layout()
 	plt.savefig(f"figs/ks_dist-{source}.pdf")
+
+	axes[0].set_yscale("log")
+	axes[0].set_xscale("log")
+	axes[1].set_yscale("log")
+	axes[1].set_xscale("log")
+	plt.savefig(f"figs/ks_dist-{source}-loglog.pdf")
 
 	# plot ks vs ke
 	plt.figure(figsize=(10,10))
