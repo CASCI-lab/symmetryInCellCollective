@@ -159,8 +159,19 @@ def analysis(data, source):
 
 	# plt.show()
 
+def compare(dataCC, dataRng):
+	data = pd.concat( [dataCC, dataRng], ignore_index=True)
+	data = data[data["version"]=="new"] # looking at calc from NEW version only, comparing CC and Rng
+	# print(data)
+
+	sns.set_context("paper")
+	plt.figure(figsize=(5,5))
+	sns.histplot(data, x="ks_norm", common_norm=False, hue="source")
+	plt.savefig(f"figs/ks-dist-compare.pdf")
+
 if __name__ == "__main__":
 	analysis(loadDataCC(), "cc")
 	analysis(loadDataRng(), "rng")
+	compare(loadDataCC(), loadDataRng())
 
 
