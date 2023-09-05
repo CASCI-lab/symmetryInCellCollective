@@ -32,8 +32,7 @@ if __name__ == "__main__":
         for trial in range(N_TRIALS_PER_FUNC):
             random.shuffle(f_out)
             bn = BooleanNode(k=int(np.log2(len(f_out))), outputs=f_out)
-            p = multiprocessing.Process(target=sym, args=(bn, ks, trial))
-            p.daemon = True
+            p = multiprocessing.Process(target=sym, args=(bn, ks, trial), daemon=True)
             p.start()
             processes.append(p)
 
