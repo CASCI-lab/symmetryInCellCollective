@@ -27,6 +27,8 @@ if __name__ == "__main__":
     ks_shuffle_vals = []
     for cc_row, cc_func in enumerate(cc["func_v1.0.0"]):
         f_out = list(cc_func)
+        if len(f_out) == 2 or len(set(f_out)) == 1:
+            continue
         processes = []
         ks = multiprocessing.Array("f", [np.nan] * N_TRIALS_PER_FUNC)
         for trial in range(N_TRIALS_PER_FUNC):
